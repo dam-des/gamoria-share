@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gamoria — Collection publique</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0f;
+      color: #e0deff;
+      font-family: monospace;
+      font-size: 14px;
+      padding-bottom: 48px;
+    }
+    header {
+      background: #12121a;
+      border-bottom: 2px solid #6c63ff;
+      padding: 16px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header-inner {
+      max-width: 720px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .logo { font-size: 16px; font-weight: bold; color: #6c63ff; letter-spacing: 3px; }
+    .total { background: #6c63ff22; border: 1px solid #6c63ff; color: #6c63ff;
+             padding: 3px 12px; font-size: 12px; }
+    main { max-width: 720px; margin: 0 auto; padding: 20px 12px 0; display: flex; flex-direction: column; gap: 20px; }
+    .console-section { border: 1px solid #2d2b55; }
+    .console-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; background: #12121a;
+      border-bottom: 1px solid #2d2b55;
+      font-size: 12px; font-weight: bold; color: #a5b4fc;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .count { padding: 2px 8px; font-size: 11px; }
+    .game-list { display: flex; flex-direction: column; }
+    .game-card {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e1e3a;
+      border-left: 4px solid #6c63ff;
+      background: #0a0a0f;
+      transition: background 0.1s;
+    }
+    .game-card:last-child { border-bottom: none; }
+    .game-card:hover { background: #12121a; }
+    .cover {
+      width: 44px; height: 44px; object-fit: contain;
+      background: #1a1a2e; flex-shrink: 0;
+    }
+    .cover-placeholder {
+      width: 44px; height: 44px; background: #1a1a2e;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0; color: #2d2b55;
+    }
+    .game-info { flex: 1; min-width: 0; }
+    .game-title { font-size: 13px; color: #e0deff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+    .game-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .badge { font-size: 10px; padding: 1px 6px; color: #fff; font-weight: bold; text-transform: uppercase; }
+    .cond { font-size: 11px; }
+    .tag { font-size: 10px; color: #9d9bb8; border: 1px solid #2d2b55; padding: 1px 5px; }
+    footer { text-align: center; margin-top: 32px; color: #4a4a6a; font-size: 11px; }
+    .state { max-width: 420px; margin: 80px auto; border: 2px solid #6c63ff; padding: 32px; text-align: center; }
+    .state h1 { font-size: 18px; color: #6c63ff; margin-bottom: 12px; letter-spacing: 2px; }
+    .state p { color: #9d9bb8; line-height: 1.5; }
+    @media (max-width: 480px) {
+      .logo { font-size: 13px; }
+      .game-card { padding: 8px 10px; }
+      .cover, .cover-placeholder { width: 36px; height: 36px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="state"><h1>&#x1F579; GAMORIA</h1><p>Chargement de la collection&hellip;</p></div>
+  </div>
+
+  <script>
+    // Endpoint public (JSON) — verify_jwt désactivé côté fonction, aucune clé requise.
+    var ENDPOINT = "https://jwsosmdicwxwhaxlpbhz.supabase.co/functions/v1/public-collection";
+
+    var CONSOLE_COLORS = {
+      "NES": "#e53e3e", "SNES": "#9f7aea", "Game Boy": "#38a169",
+      "Game Boy Color": "#48bb78", "Game Boy Advance": "#0987a0",
+      "Nintendo 64": "#dd6b20", "GameCube": "#2b6cb0", "Wii": "#718096",
+      "Wii U": "#2c7a7b", "Nintendo DS": "#b7791f", "Nintendo 3DS": "#b83280",
+      "Mega Drive": "#2b6cb0", "Master System": "#2c5282", "Saturn": "#6b46c1",
+      "Dreamcast": "#c05621", "PlayStation": "#434190", "PlayStation 2": "#2d3561",
+      "PlayStation 3": "#1a365d", "PSP": "#0694a2", "PS Vita": "#285e61",
+      "Neo Geo": "#c05621", "Atari 2600": "#b7791f", "PC Engine": "#97266d",
+      "Xbox": "#276749", "Xbox 360": "#22543d"
+    };
+    function consoleColor(name) {
+      if (CONSOLE_COLORS[name]) return CONSOLE_COLORS[name];
+      var ln = (name || "").toLowerCase();
+      for (var k in CONSOLE_COLORS) {
+        var lk = k.toLowerCase();
+        if (ln.indexOf(lk) !== -1 || lk.indexOf(ln) !== -1) return CONSOLE_COLORS[k];
+      }
+      return "#6c63ff";
+    }
+    var CONDITION_LABEL = { mint: "Neuf", very_good: "Très bon", good: "Bon", fair: "Correct", poor: "Mauvais" };
+    var CONDITION_COLOR = { mint: "#4ade80", very_good: "#34d399", good: "#facc15", fair: "#fb923c", poor: "#f87171" };
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function showState(title, msg) {
+      document.getElementById("app").innerHTML =
+        '<div class="state"><h1>' + title + '</h1><p>' + esc(msg) + '</p></div>';
+    }
+
+    function render(items, total) {
+      var byConsole = {};
+      items.forEach(function (it) {
+        var c = it.console || "Inconnue";
+        (byConsole[c] = byConsole[c] || []).push(it);
+      });
+      var blocks = Object.keys(byConsole)
+        .sort(function (a, b) { return byConsole[b].length - byConsole[a].length; })
+        .map(function (consoleName) {
+          var games = byConsole[consoleName];
+          var color = consoleColor(consoleName);
+          var rows = games.map(function (g) {
+            var cond = g.condition || "";
+            var condColor = CONDITION_COLOR[cond] || "#9d9bb8";
+            var condLabel = CONDITION_LABEL[cond] || "—";
+            var cover = g.cover_url
+              ? '<img src="' + esc(g.cover_url) + '" alt="' + esc(g.title) + '" class="cover" loading="lazy">'
+              : '<div class="cover-placeholder">&#x1F3AE;</div>';
+            return '<div class="game-card" style="border-left-color:' + color + '">' +
+              cover +
+              '<div class="game-info"><div class="game-title">' + esc(g.title) + '</div>' +
+              '<div class="game-meta">' +
+              '<span class="badge" style="background:' + color + '">' + esc(consoleName) + '</span>' +
+              '<span class="cond" style="color:' + condColor + '">' + condLabel + '</span>' +
+              (g.has_box ? '<span class="tag">Boîte</span>' : '') +
+              (g.has_manual ? '<span class="tag">Notice</span>' : '') +
+              '</div></div></div>';
+          }).join("");
+          return '<section class="console-section">' +
+            '<div class="console-header" style="border-left:4px solid ' + color + '">' +
+            '<span>' + esc(consoleName) + '</span>' +
+            '<span class="count" style="background:' + color + '22;color:' + color + '">' + games.length + '</span>' +
+            '</div><div class="game-list">' + rows + '</div></section>';
+        }).join("");
+
+      document.getElementById("app").innerHTML =
+        '<header><div class="header-inner">' +
+        '<span class="logo">&#x1F579; GAMORIA</span>' +
+        '<span class="total">' + total + ' JEU' + (total > 1 ? 'X' : '') + '</span>' +
+        '</div></header><main>' + blocks + '</main>' +
+        '<footer><p>Partagé avec Gamoria</p></footer>';
+    }
+
+    function getToken() {
+      var p = new URLSearchParams(window.location.search);
+      return p.get("token");
+    }
+
+    (function () {
+      var token = getToken();
+      if (!token) { showState("Lien invalide", "Ce lien ne contient pas de token de partage."); return; }
+      fetch(ENDPOINT + "?token=" + encodeURIComponent(token), { headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (data) {
+          if (!data || data.ok !== true) {
+            showState("Collection indisponible", "Cette collection est privée ou le lien n'est plus valide.");
+            return;
+          }
+          render(data.items || [], data.total || 0);
+        })
+        .catch(function () {
+          showState("Oups", "Impossible de charger la collection. Réessaie plus tard.");
+        });
+    })();
+  </script>
+</body>
+</html>
